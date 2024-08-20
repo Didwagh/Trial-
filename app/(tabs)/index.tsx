@@ -1,70 +1,153 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, Button } from 'react-native';
+import axios from 'axios';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+// Define types for the event data
+interface Event {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  labels?: string[];
+  start: string;
+  end: string;
+  location?: [number, number]; // Coordinates as [longitude, latitude]
+  geo?: {
+    geometry?: {
+      coordinates?: [number, number];
+    };
+    address?: {
+      country_code?: string;
+    };
+  };
+  timezone?: string;
+  state?: string;
 }
 
+// Replace 'YOUR_API_KEY' with your actual PredictHQ API key
+const API_KEY = 'ZL1n24qkOLnDFk1ORHSOu2dMNvPOX7MaXYVXWUeD'; // Hardcoded API key
+const BASE_URL = 'https://api.predicthq.com/v1';
+
+const App: React.FC = () => {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [nextUrl, setNextUrl] = useState<string | null>(null); // For pagination
+
+  // Function to fetch events
+  const fetchEvents = async (url: string) => {
+    try {
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+        },
+      });
+
+      // Filter out duplicate events and events not in the 'disasters' category
+      setEvents(prevEvents => [
+        ...prevEvents,
+        ...response.data.results.filter((event: Event) => 
+          !prevEvents.some(e => e.id === event.id) &&
+          event.category === 'disasters'
+        )
+      ]);
+
+      setNextUrl(response.data.next || null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to fetch multiple pages until we have at least 10 events
+  const fetchAllEvents = async () => {
+    let url = `${BASE_URL}/events?q=India&limit=10&sort=start&category=disasters`;
+    while (events.length < 10 && url) {
+      await fetchEvents(url);
+      url = nextUrl || ""; // Update URL for the next page
+    }
+  };
+
+  useEffect(() => {
+    fetchAllEvents();
+  }, []);
+
+  const loadMoreEvents = () => {
+    if (nextUrl) {
+      setLoading(true);
+      fetchEvents(nextUrl);
+    }
+  };
+
+  if (loading && !events.length) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text>Error: {error}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {events.length > 0 ? (
+        <FlatList
+          data={events}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <View style={styles.event}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text>Date: {item.start}</Text>
+              <Text>Category: {item.category || 'Not available'}</Text>
+              {item.labels && item.labels.length > 0 && (
+                <Text>Labels: {item.labels.join(', ')}</Text>
+              )}
+              {item.geo?.geometry?.coordinates ? (
+                <Text>Coordinates: Latitude {item.geo.geometry.coordinates[1]}, Longitude {item.geo.geometry.coordinates[0]}</Text>
+              ) : (
+                <Text>Coordinates: Not available</Text>
+              )}
+              {item.timezone && <Text>Timezone: {item.timezone}</Text>}
+              {item.state && <Text>Status: {item.state}</Text>}
+            </View>
+          )}
+        />
+      ) : (
+        <Text>No events found.</Text>
+      )}
+      {nextUrl && events.length >= 10 && (
+        <Button title="Load More" onPress={loadMoreEvents} />
+      )}
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    padding: 16,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  event: {
+    marginBottom: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
   },
 });
+
+export default App;
