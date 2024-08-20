@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Button } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Button, TextInput } from 'react-native';
 import axios from 'axios';
 
 // Define types for the event data
@@ -11,12 +11,13 @@ interface Event {
   labels?: string[];
   start: string;
   end: string;
-  location?: [number, number]; // Coordinates as [longitude, latitude]
   geo?: {
     geometry?: {
       coordinates?: [number, number];
     };
     address?: {
+      city?: string; // Add city
+      district?: string; // Add district
       country_code?: string;
     };
   };
@@ -30,9 +31,11 @@ const BASE_URL = 'https://api.predicthq.com/v1';
 
 const App: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [nextUrl, setNextUrl] = useState<string | null>(null); // For pagination
+  const [location, setLocation] = useState<string>(''); // Location input
+  const [query, setQuery] = useState<string>(''); // Input for fetching events
 
   // Function to fetch events
   const fetchEvents = async (url: string) => {
@@ -60,18 +63,29 @@ const App: React.FC = () => {
     }
   };
 
-  // Function to fetch multiple pages until we have at least 10 events
+  // Function to fetch events based on location
   const fetchAllEvents = async () => {
-    let url = `${BASE_URL}/events?q=India&limit=10&sort=start&category=disasters`;
-    while (events.length < 10 && url) {
+    if (!query) return;
+
+    setLoading(true); // Set loading to true when starting a new fetch
+    setEvents([]); // Clear existing events
+
+    let url = `${BASE_URL}/events?q=${encodeURIComponent(query)}&limit=10&sort=start&category=disasters`;
+    while (url) {
       await fetchEvents(url);
       url = nextUrl || ""; // Update URL for the next page
     }
   };
 
   useEffect(() => {
-    fetchAllEvents();
-  }, []);
+    if (query) {
+      fetchAllEvents();
+    }
+  }, [query]);
+
+  const handleSearch = () => {
+    setQuery(location); // Set query to trigger data fetch
+  };
 
   const loadMoreEvents = () => {
     if (nextUrl) {
@@ -98,6 +112,14 @@ const App: React.FC = () => {
 
   return (
     <View style={styles.container}>
+      <TextInput
+        style={styles.input}
+        placeholder="Enter location (e.g., Mumbai, India)"
+        value={location}
+        onChangeText={setLocation}
+      />
+      <Button title="Search" onPress={handleSearch} />
+      
       {events.length > 0 ? (
         <FlatList
           data={events}
@@ -110,10 +132,10 @@ const App: React.FC = () => {
               {item.labels && item.labels.length > 0 && (
                 <Text>Labels: {item.labels.join(', ')}</Text>
               )}
-              {item.geo?.geometry?.coordinates ? (
-                <Text>Coordinates: Latitude {item.geo.geometry.coordinates[1]}, Longitude {item.geo.geometry.coordinates[0]}</Text>
+              {item.geo?.address?.city || item.geo?.address?.district ? (
+                <Text>Location: {item.geo.address.city || item.geo.address.district}</Text>
               ) : (
-                <Text>Coordinates: Not available</Text>
+                <Text>Location: Not available</Text>
               )}
               {item.timezone && <Text>Timezone: {item.timezone}</Text>}
               {item.state && <Text>Status: {item.state}</Text>}
@@ -147,6 +169,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    padding: 8,
+    borderRadius: 4,
+    width: '100%',
+    marginBottom: 8,
   },
 });
 
