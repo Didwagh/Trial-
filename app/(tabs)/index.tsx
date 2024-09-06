@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, Button, TextInput } from 'react-native';
 import axios from 'axios';
+import Map from '../comps/Home/map'; // Adjust path as needed
+import { useThemeColor } from '@/hooks/useThemeColor'; // Adjust path as needed
 
 // Define types for the event data
 interface Event {
@@ -29,13 +31,18 @@ interface Event {
 const API_KEY = 'ZL1n24qkOLnDFk1ORHSOu2dMNvPOX7MaXYVXWUeD'; // Hardcoded API key
 const BASE_URL = 'https://api.predicthq.com/v1';
 
-const App: React.FC = () => {
+const Index: React.FC = () => {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [nextUrl, setNextUrl] = useState<string | null>(null); // For pagination
   const [location, setLocation] = useState<string>(''); // Location input
   const [query, setQuery] = useState<string>(''); // Input for fetching events
+
+  // Use theme colors
+  const backgroundColor = useThemeColor({ light: '#ffffff', dark: '#000000' }, 'background');
+  const textColor = useThemeColor({ light: '#000000', dark: '#ffffff' }, 'text');
+
 
   // Function to fetch events
   const fetchEvents = async (url: string) => {
@@ -49,7 +56,7 @@ const App: React.FC = () => {
       // Filter out duplicate events and events not in the 'disasters' category
       setEvents(prevEvents => [
         ...prevEvents,
-        ...response.data.results.filter((event: Event) => 
+        ...response.data.results.filter((event: Event) =>
           !prevEvents.some(e => e.id === event.id) &&
           event.category === 'disasters'
         )
@@ -96,58 +103,67 @@ const App: React.FC = () => {
 
   if (loading && !events.length) {
     return (
-      <View style={styles.container}>
-        <Text>Loading...</Text>
+      <View style={[styles.container, { backgroundColor }]}>
+        <Text style={{ color: textColor }}>Loading...</Text>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <Text>Error: {error}</Text>
+      <View style={[styles.container, { backgroundColor }]}>
+        <Text style={{ color: textColor }}>Error: {error}</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.input}
-        placeholder="Enter location (e.g., Mumbai, India)"
-        value={location}
-        onChangeText={setLocation}
-      />
-      <Button title="Search" onPress={handleSearch} />
-      
+    <View style={[styles.container, { backgroundColor }]}>
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={[
+            styles.input,
+            { borderColor: textColor, color: textColor } // Apply text color and border color based on theme
+          ]}
+          placeholder="Enter location (e.g., Mumbai, India)"
+          placeholderTextColor={textColor} // Apply placeholder color based on theme
+          value={location}
+          onChangeText={setLocation}
+        />
+       <Button title="Search" onPress={handleSearch} />
+      </View>
+
+
       {events.length > 0 ? (
         <FlatList
           data={events}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <View style={styles.event}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text>Date: {item.start}</Text>
-              <Text>Category: {item.category || 'Not available'}</Text>
+            <View style={[styles.event, { backgroundColor: textColor }]}>
+              <Text style={{ color: backgroundColor }}>{item.title}</Text>
+              <Text style={{ color: backgroundColor }}>Date: {item.start}</Text>
+              <Text style={{ color: backgroundColor }}>Category: {item.category || 'Not available'}</Text>
               {item.labels && item.labels.length > 0 && (
-                <Text>Labels: {item.labels.join(', ')}</Text>
+                <Text style={{ color: backgroundColor }}>Labels: {item.labels.join(', ')}</Text>
               )}
               {item.geo?.address?.city || item.geo?.address?.district ? (
-                <Text>Location: {item.geo.address.city || item.geo.address.district}</Text>
+                <Text style={{ color: backgroundColor }}>Location: {item.geo.address.city || item.geo.address.district}</Text>
               ) : (
-                <Text>Location: Not available</Text>
+                <Text style={{ color: backgroundColor }}>Location: Not available</Text>
               )}
-              {item.timezone && <Text>Timezone: {item.timezone}</Text>}
-              {item.state && <Text>Status: {item.state}</Text>}
+              {item.timezone && <Text style={{ color: backgroundColor }}>Timezone: {item.timezone}</Text>}
+              {item.state && <Text style={{ color: backgroundColor }}>Status: {item.state}</Text>}
             </View>
           )}
         />
       ) : (
-        <Text>No events found.</Text>
+        <Text style={{ color: textColor }}>No events found.</Text>
       )}
       {nextUrl && events.length >= 10 && (
         <Button title="Load More" onPress={loadMoreEvents} />
       )}
+
+      <Map />
     </View>
   );
 };
@@ -155,9 +171,19 @@ const App: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     padding: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  input: {
+    borderWidth: 1,
+    padding: 8,
+    borderRadius: 4,
+    flex: 1,
+    marginRight: 8,
   },
   title: {
     fontSize: 18,
@@ -170,14 +196,6 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 8,
-    borderRadius: 4,
-    width: '100%',
-    marginBottom: 8,
-  },
 });
 
-export default App;
+export default Index;
